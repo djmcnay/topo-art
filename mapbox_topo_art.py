@@ -8,31 +8,28 @@ from PIL import Image
 from dotenv import load_dotenv
 import plotly.graph_objects as go
 
-load_dotenv()
-MAPBOX_TOKEN = os.getenv("MAPBOX_TOKEN")
-if not MAPBOX_TOKEN:
-    raise RuntimeError("MAPBOX_TOKEN not set in environment")
-
-
 
 class TopoArt:
     """ """
 
     def __init__(
             self,
-            mapbox_token: str = MAPBOX_TOKEN
+            mapbox_token: str = None
     ):
         """ """
 
         # mapbox api key can either be provided as a string or set as an env variable
         if mapbox_token is None:
+            load_dotenv()
             mapbox_token = os.getenv("MAPBOX_TOKEN", None)
         self.mapbox_token = mapbox_token
 
         #
+        self.centre: tuple = None
         self.bbox: tuple | list = None
         self.Z: np.ndarray = None
         self.zoom: int = None
+
 
     def load_geojson(self, json_path):
         """
@@ -76,6 +73,9 @@ class TopoArt:
 
         from math import cos, radians
 
+        if lon is None or lat is None:
+            lon, lat = self.centre
+
         # Half extents in km
         half_w_km = (aspect[0] * size_km) / 2.0
         half_h_km = (aspect[1] * size_km) / 2.0
@@ -111,14 +111,13 @@ class TopoArt:
         elevation = -10000.0 + ((R * 256 * 256 + G * 256 + B) * 0.1)
         return elevation
 
-    def mapbox_geojson_from_bbox(self, zoom, json_path, tile_size=256, downsample=1):
+    def mapbox_geojson_from_bbox(self, zoom, tile_size=256, downsample=1):
         """
         Fetch Mapbox terrain-rgb tiles for a bbox, build an elevation grid, and
         save it to a JSON file.
 
         bbox: (min_lon, min_lat, max_lon, max_lat)
         zoom: Web Mercator zoom level (11–13 sensible for this use case)
-        json_path: path to write JSON cache
         downsample: integer step to subsample rows/cols (>=1)
         """
 
@@ -144,7 +143,7 @@ class TopoArt:
         for t in tiles:
             url = (
                 f"https://api.mapbox.com/v4/mapbox.terrain-rgb/"
-                f"{t.z}/{t.x}/{t.y}.pngraw?access_token={MAPBOX_TOKEN}"
+                f"{t.z}/{t.x}/{t.y}.pngraw?access_token={self.mapbox_token}"
             )
             r = requests.get(url)
             r.raise_for_status()
@@ -171,16 +170,15 @@ class TopoArt:
             Z = Z[::downsample, ::downsample]
 
         self.Z = Z
-        return self.Z
 
 
-    def contour_config_from_interval(self, Z, metres_per_contour, z_clip_min=None, z_clip_max=None):
+    def contour_config_from_interval(self, metres_per_contour, z_clip_min=None, z_clip_max=None):
         """
         From an elevation grid Z (metres), work out zmin, zmax and ncontours
         for a desired vertical spacing in metres.
         """
-        zmin = float(np.nanmin(Z))
-        zmax = float(np.nanmax(Z))
+        zmin = float(np.nanmin(self.Z))
+        zmax = float(np.nanmax(self.Z))
 
         if z_clip_min is not None:
             zmin = max(zmin, z_clip_min)
@@ -194,15 +192,16 @@ class TopoArt:
         return zmin, zmax, ncontours
 
 
-    def plot_contour(self, Z, bbox, colorscale="Viridis", showscale=False, title=None):
+    def plot_contour(
+            self, colorscale="Viridis", showscale=False, title=None):
         """
         Plot an elevation grid as a filled contour plot using Plotly,
         with the correct geographic aspect ratio.
         """
-        min_lon, min_lat, max_lon, max_lat = bbox
-        h, w = Z.shape
+        min_lon, min_lat, max_lon, max_lat = self.bbox
+        h, w = self.Z.shape
 
-        _, _, n_contours = self.contour_config_from_interval(Z, metres_per_contour=25)
+        _, _, n_contours = self.contour_config_from_interval(metres_per_contour=25)
 
         # Build coordinate arrays so Plotly stretches correctly
         lons = np.linspace(min_lon, max_lon, w)
@@ -210,7 +209,7 @@ class TopoArt:
 
         fig = go.Figure(
             go.Contour(
-                z=Z,
+                z=self.Z,
                 x=lons,    # longitude axis
                 y=lats,    # latitude axis
                 colorscale=colorscale,
