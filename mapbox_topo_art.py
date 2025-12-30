@@ -193,7 +193,14 @@ class TopoArt:
 
 
     def plot_contour(
-            self, colorscale="Viridis", showscale=False, title=None):
+            self,
+            colorscale="Viridis",
+            showscale=False,
+            metres_per_contour=25,
+            contour_width=0.5,
+            contour_colour="rgba(0, 0, 0, 0.15)",
+            title=None,
+    ):
         """
         Plot an elevation grid as a filled contour plot using Plotly,
         with the correct geographic aspect ratio.
@@ -201,7 +208,9 @@ class TopoArt:
         min_lon, min_lat, max_lon, max_lat = self.bbox
         h, w = self.Z.shape
 
-        _, _, n_contours = self.contour_config_from_interval(metres_per_contour=25)
+        _, _, n_contours = self.contour_config_from_interval(
+            metres_per_contour=metres_per_contour,
+        )
 
         # Build coordinate arrays so Plotly stretches correctly
         lons = np.linspace(min_lon, max_lon, w)
@@ -218,8 +227,8 @@ class TopoArt:
                     showlines=False,
                 ),
                 line=dict(
-                    width=0.5,
-                    color="rgba(0, 0, 0, 0.15)"
+                    width=contour_width,
+                    color=contour_colour,
                 ),
                 showscale=showscale,
                 ncontours=n_contours,
