@@ -5,6 +5,7 @@ import folium
 from streamlit_folium import st_folium
 from mapbox_topo_art import TopoArt
 
+# set app config stuff... can't be bothered to make it too pretty
 st.set_page_config(
     layout="centered",
     page_title="Topo Art",
@@ -14,17 +15,18 @@ st.set_page_config(
 
 @st.cache_resource
 def init_topo_art():
+    """ create instance of TopoArt and load cached data if available """
     return TopoArt()
 
 art = init_topo_art()
 
+# session state
 # init a folium zoom level in the session state
 if 'map_zoom' not in st.session_state:
-    st.session_state['map_zoom'] = 2
+    st.session_state['map_zoom'] = 7
 
 if 'map_center' not in st.session_state:
     st.session_state['map_center'] = [0, 0]
-
 
 
 st.title("Topo Art")
@@ -64,9 +66,8 @@ with st.sidebar:
 # Choose the initial map centre
 if art.centre is not None:
     map_center = [art.centre["lat"], art.centre["lon"]]
-    # zoom = st.session_state["map_zoom"]
 else:
-    map_center = [0, 0]
+    map_center = [51.4266, 0]
 
 
 zoom = st.session_state["map_zoom"]
