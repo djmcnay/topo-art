@@ -61,7 +61,6 @@ with st.sidebar:
             max_value=10.0,
             help="size of grid squares in km i.e. 0.2 implies 1cm is 200m x 200m",
         )
-    # rotation = st.number_input("rotation", value=0, min_value=-180, max_value=180)
 
 # Choose the initial map centre
 if art.centre is not None:
@@ -89,12 +88,11 @@ if art.centre is not None:
     ).add_to(m)
 
     # compute bbox using art & draw rectangle
-    min_lon, min_lat, max_lon, max_lat = art.bbox_from_coords_with_rotation(
+    min_lon, min_lat, max_lon, max_lat = art.bbox_from_coords(
         lon=lon_c,
         lat=lat_c,
         size_km=grid_size,
         aspect=(width, height),
-        # rotation_deg=rotation,
     )
 
     folium.Rectangle(
@@ -103,22 +101,6 @@ if art.centre is not None:
         weight=2,
         fill=False,
     ).add_to(m)
-
-    # # Draw the actual rotated rectangle (this will preserve the aspect ratio)
-    # if hasattr(art, 'rotated_corners'):
-    #     # Convert to (lat, lon) format for folium
-    #     folium_corners = [[lat, lon] for lon, lat in art.rotated_corners]
-    #     # Add the first corner again to close the polygon
-    #     folium_corners.append(folium_corners[0])
-    #
-    #     folium.Polygon(
-    #         locations=folium_corners,
-    #         color="blue",
-    #         weight=2,
-    #         fill=True,
-    #         fill_opacity=0.1,
-    #         popup=f"Rotated Rectangle ({width}x{height}) at {rotation}°"
-    #     ).add_to(m)
 
 
 tabs = st.tabs(["Map", "Topo Graph"])
