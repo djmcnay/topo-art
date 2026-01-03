@@ -1,4 +1,6 @@
 # app.py
+import os
+from dotenv import load_dotenv
 import pandas as pd
 import streamlit as st
 import folium
@@ -11,6 +13,12 @@ st.set_page_config(
     page_title="Topo Art",
     page_icon="🗺️",
 )
+
+st.title("Topo Art")
+
+load_dotenv()
+assert "MAPBOX_TOKEN" in os.environ
+print(os.environ["MAPBOX_TOKEN"][:6])
 
 @st.cache_resource
 def init_topo_art():
@@ -26,9 +34,6 @@ if 'map_zoom' not in st.session_state:
 
 if 'map_center' not in st.session_state:
     st.session_state['map_center'] = [0, 0]
-
-
-st.title("Topo Art")
 
 # inputs: determine the width, height and grid-square size
 with st.sidebar:
