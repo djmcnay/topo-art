@@ -8,15 +8,19 @@ credentials:
     ann:
       failed_login_attempts: 0
       logged_in: false
-      password: $2b$12$E09XKg5ell/HOwJ89Dj/JuVs68MdiwvWs9jvFwZhRii2fnHeL0mWS
+      password: $2b$12$UlxhIVP1j2JvF5LLYz5AJue/hvrKOHK7fco1MB4XaByX2Du4oKIRK
     dmcnay:
       failed_login_attempts: 0
       logged_in: false
-      password: $2b$12$Kia5FxM2UZSHyfZKJJRgCOjlE/17kPYVGmp7DFOO/GdMjdTzORJE6
+      password: $2b$12$JHTO7BMKVpgsoL3Pvtk9y.gJlCUPpghGGteXZbg734a0TFl8aO6ye
+    placeswekeep:
+      failed_login_attempts: 0
+      logged_in: false
+      password: $2b$12$fxtkh2yRVoJDbYFKZz2dIuXNJKT3.EcpdpxOfXVfasrB8Lv1yqCYe
     splodgie:
       failed_login_attempts: 0
       logged_in: false
-      password: $2b$12$7eeBtwEI2JOzjNZTlnBT0uNwkqFfTD/wzEATXwHLpDxO8CBJKOP1G
+      password: $2b$12$EDfsdGQWFfYyn5Miyzju.u8SqGuWfVNu0Zo./1M7qX.XgpEiR9TXS
 oauth2:
   google:
     client_id: null
