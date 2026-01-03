@@ -1,3 +1,16 @@
+---
+title: TopoArt
+emoji: "🗺"
+colorFrom: blue
+colorTo: green
+python_version: 3.12.9
+sdk: streamlit
+sdk_version: 1.45.0
+app_file: app.py
+pinned: true
+header: mini
+---
+
 # Topo Art 
 Project is an attempt to create "art" from a topographical map. 
 Originally to build a custom desktop to be printed at [The Printed Find](https://theprintedfind.com/).
