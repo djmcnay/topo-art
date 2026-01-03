@@ -14,7 +14,7 @@ st.set_page_config(
     page_icon="🗺️",
 )
 
-#
+# Page title
 st.title("Topo Art")
 
 load_dotenv()
