@@ -290,6 +290,15 @@ with tabs[1]:
         fig.add_annotation(x=0.5, xref="paper", y=0.5, yref="paper", text="X", showarrow=False)
         fig.add_annotation(x=art.centre["lon"], y=art.centre["lat"], text="O", showarrow=False)
 
+    # scaling factor for image export
+    n_scale = st.sidebar.number_input(
+        "scale factor",
+        min_value=1,
+        max_value=10,
+        value=2,
+        step=1,
+        help="scale multiplier when downloading SVG image",
+    )
 
     st.plotly_chart(
         fig,
@@ -298,7 +307,7 @@ with tabs[1]:
           'toImageButtonOptions': {
             'format': 'svg',
             'filename': 'topo_art',
-            'scale': 5}
+            'scale': n_scale}
         }
     )
 
