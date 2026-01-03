@@ -1,4 +1,8 @@
 ### Python template
+
+# hide the raw file for making passwords
+.streamlit/auth_config_raw.yaml
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

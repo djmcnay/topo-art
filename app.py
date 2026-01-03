@@ -1,11 +1,14 @@
 # app.py
 import os
-from dotenv import load_dotenv
 import pandas as pd
 import streamlit as st
 import folium
 from streamlit_folium import st_folium
 from mapbox_topo_art import TopoArt
+import streamlit_authenticator as stauth
+from streamlit_authenticator.utilities import LoginError
+import yaml
+from yaml.loader import SafeLoader
 
 # set app config stuff... can't be bothered to make it too pretty
 st.set_page_config(
@@ -14,12 +17,41 @@ st.set_page_config(
     page_icon="🗺️",
 )
 
+# Load authenticator config file: containes usernames and hashed passwords
+with open('./.streamlit/auth_config.yaml') as file:
+    config = yaml.load(file, Loader=SafeLoader)
+
+# Initialize authenticator
+authenticator = stauth.Authenticate(
+    config['credentials'],
+    config['cookie']['name'],
+    config['cookie']['key'],
+    config['cookie']['expiry_days']
+)
+
+### Authentication Block
+# check if the user is already authenticated in the session state
+# if not trigger the authentication widget
+if not st.session_state.get("authentication_status", None):
+    try:
+        authenticator.login(location="main", key="login-widget-home")
+        st.rerun()      # not required: trigger removes the widget on success
+    except LoginError as e:
+         st.error(e)
+
+# check authentication status before continuing
+if st.session_state["authentication_status"] is None:
+    st.warning("Please enter your username and password")
+    st.stop()
+elif st.session_state["authentication_status"] is False:
+    st.error("Username/password is incorrect")
+    st.stop()
+
+# Validate Env Variables
+assert "MAPBOX_TOKEN" in os.environ, "MAPBOX_TOKEN environment variable not set"
+
 # Page title
 st.title("Topo Art")
-
-load_dotenv()
-assert "MAPBOX_TOKEN" in os.environ
-print(os.environ["MAPBOX_TOKEN"][:6])
 
 @st.cache_resource
 def init_topo_art():

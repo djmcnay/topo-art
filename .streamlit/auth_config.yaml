@@ -1,0 +1,33 @@
+api_key: null
+cookie:
+  expiry_days: 7
+  key: gH7k9P2oV4hQeZ1rBn6LsXa9Jf3tW
+  name: hugging_face_topo_art_ui
+credentials:
+  usernames:
+    ann:
+      failed_login_attempts: 0
+      logged_in: false
+      password: $2b$12$E09XKg5ell/HOwJ89Dj/JuVs68MdiwvWs9jvFwZhRii2fnHeL0mWS
+    dmcnay:
+      failed_login_attempts: 0
+      logged_in: false
+      password: $2b$12$Kia5FxM2UZSHyfZKJJRgCOjlE/17kPYVGmp7DFOO/GdMjdTzORJE6
+    splodgie:
+      failed_login_attempts: 0
+      logged_in: false
+      password: $2b$12$7eeBtwEI2JOzjNZTlnBT0uNwkqFfTD/wzEATXwHLpDxO8CBJKOP1G
+oauth2:
+  google:
+    client_id: null
+    client_secret: null
+    redirect_uri: null
+  microsoft:
+    client_id: null
+    client_secret: null
+    redirect_uri: null
+    tenant_id: null
+pre-authorized:
+  emails:
+  - dmcnay3@gatech.edu
+  - djmcnay@gmail.com
