@@ -28,7 +28,7 @@ jobs:
       - name: Push to Hugging Face Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          HF_SPACE: "djmcnay/TopoArt"   # <-- change to your actual space path
+          HF_SPACE: "djmcnay/TopoArt"
         run: |
           git remote add space "https://api:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE}.git"
           git push --force space HEAD:main
