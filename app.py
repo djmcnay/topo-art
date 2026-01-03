@@ -14,7 +14,7 @@ st.set_page_config(
 
 @st.cache_resource
 def init_topo_art():
-    """ create instance of TopoArt and load cached data if available """
+    """ create an instance of TopoArt and load cached data if available """
     return TopoArt()
 
 art = init_topo_art()
@@ -67,9 +67,7 @@ if art.centre is not None:
 else:
     map_center = [51.4266, 0]
 
-
 zoom = st.session_state["map_zoom"]
-
 
 # create a map and allow Lat/Lon popups on click
 m = folium.Map(location=map_center, zoom_start=zoom, tiles="OpenStreetMap",)
