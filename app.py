@@ -12,7 +12,6 @@ st.set_page_config(
     page_icon="🗺️",
 )
 
-
 @st.cache_resource
 def init_topo_art():
     """ create instance of TopoArt and load cached data if available """
@@ -72,7 +71,7 @@ else:
 zoom = st.session_state["map_zoom"]
 
 
-# create map & allow Lat/Lon popups on click
+# create a map and allow Lat/Lon popups on click
 m = folium.Map(location=map_center, zoom_start=zoom, tiles="OpenStreetMap",)
 m.add_child(folium.LatLngPopup())
 
@@ -107,20 +106,16 @@ tabs = st.tabs(["Map", "Topo Graph"])
 
 # Render map & capture clicks
 with tabs[0]:
+
     st_data = st_folium(m, width=900, height=550)
+
+    if art.centre is not None:
+        st.markdown(
+            f"Centre: {map_center[0]:.4f}, {map_center[1]:.4f}; Bounding Box: {[f'{i:.4f}' for i in art.bbox]}",
+        )
 
     # Update centre on click (and cause rerun -> rectangle updates)
     if st_data:
-
-        # if "zoom" in st_data:
-        #     st.session_state["map_zoom"] = st_data["zoom"]
-        #
-        # # Always update center if map was moved (center_lat and center_lng exist)
-        # if "center" in st_data:
-        #     st.session_state["map_center"] = [
-        #         st_data["center"]["lat"],
-        #         st_data["center"]["lng"]
-        #     ]
 
         if st_data.get("last_clicked"):
 
@@ -144,62 +139,92 @@ with st.sidebar:
 
     st.markdown("### Colour scale")
 
-    # find how many colours we are having in the colour gradient [max 3]
-    n_colours = st.slider("number of colours", 1, 3, 3, step=1)
-
-    # widget for colour pickers (with defaults)
-    cols = st.columns(3)
-    with cols[0]:
-        # must always have at least `1-colour & c1 is the primary
-        c1 = st.color_picker("low", value="#008080")
-    with cols[1]:
-
-        # only require the mid-colour in a 3-point scale
-        # in a 2-point scale we just set mid as c1
-        c2 = st.color_picker("mid", value="#FFFFFF") if n_colours == 3 else c1
-    with cols[2]:
-
-        # for high, we need it for 2 or 3 colours
-        # set as c1 only picking a single colour
-        c3 = c1 if n_colours == 1 else st.color_picker("high", value="#800080")
-
-    # Initial values for the opacities
-    opacity_df = pd.DataFrame({
-        'point': ['low', 'mid', 'high'],
-        'opacity': [0.5, 0.5, 0.5]
-    })
-
-    # Use data editor to adjust all three values in one place
-    updated_df = st.data_editor(
-        opacity_df,
-        column_config={
-            "point": st.column_config.TextColumn("Position"),
-            "opacity": st.column_config.NumberColumn(
-                "Opacity",
-                min_value=0.0,
-                max_value=1.0,
-                step=0.01,
-                format="%.2f",
-            ),
-        },
-        hide_index=True,
-        use_container_width=True
+    # selection of colour scales:
+    # Artemis Custom is where we build our own
+    # Others are imported from Plotly
+    colour_scale_options = (
+        "Artemis Custom",
+        "Viridis",
+        "Tealrose",
+        "Tealrose_r"
     )
 
-    # Get the three opacity values
-    o1 = updated_df.loc[updated_df['point'] == 'low', 'opacity'].values[0]
-    o2 = updated_df.loc[updated_df['point'] == 'mid', 'opacity'].values[0]
-    o3 = updated_df.loc[updated_df['point'] == 'high', 'opacity'].values[0]
+    # dropdown menu to select colour scale; set colourscale
+    dd_colour_scales = st.selectbox("Colour Scale", colour_scale_options, index=0)
+    colourscale = dd_colour_scales
 
-    if n_colours == 1:
-        o2 = o1
-        o3 = o1
-    elif n_colours == 2:
-        o3 = o1
+    # only if we have selected Artemis Custom do we need all the rest of the selection faff
+    # in the fullness of time we can param this into a widget if required
+    if dd_colour_scales == "Artemis Custom":
 
-    scale_mid = st.slider("midpoint", 0.0, 1.0, 0.25, step=0.01)
+            # find how many colours we are having in the colour gradient [max 3]
+            n_colours = st.slider("number of colours", 1, 3, 3, step=1)
+
+            # widget for colour pickers (with defaults)
+            cols = st.columns(3)
+            with cols[0]:
+                # must always have at least `1-colour & c1 is the primary
+                c1 = st.color_picker("low", value="#008080")
+            with cols[1]:
+
+                # only require the mid-colour in a 3-point scale
+                # in a 2-point scale we just set mid as c1
+                c2 = st.color_picker("mid", value="#FFFFFF") if n_colours == 3 else c1
+            with cols[2]:
+
+                # for high, we need it for 2 or 3 colours
+                # set as c1 only picking a single colour
+                c3 = c1 if n_colours == 1 else st.color_picker("high", value="#800080")
+
+            # Initial values for the opacities
+            opacity_df = pd.DataFrame({
+                'point': ['low', 'mid', 'high'],
+                'opacity': [0.5, 0.5, 0.5]
+            })
+
+            # Use data editor to adjust all three values in one place
+            updated_df = st.data_editor(
+                opacity_df,
+                column_config={
+                    "point": st.column_config.TextColumn("Position"),
+                    "opacity": st.column_config.NumberColumn(
+                        "Opacity",
+                        min_value=0.0,
+                        max_value=1.0,
+                        step=0.01,
+                        format="%.2f",
+                    ),
+                },
+                hide_index=True,
+                use_container_width=True
+            )
+
+            # Get the three opacity values
+            o1 = updated_df.loc[updated_df['point'] == 'low', 'opacity'].values[0]
+            o2 = updated_df.loc[updated_df['point'] == 'mid', 'opacity'].values[0]
+            o3 = updated_df.loc[updated_df['point'] == 'high', 'opacity'].values[0]
+
+            if n_colours == 1:
+                o2 = o1
+                o3 = o1
+            elif n_colours == 2:
+                o3 = o1
+
+            scale_mid = st.slider("midpoint", 0.0, 1.0, 0.25, step=0.01)
+
+            # for the colourscale we always use 3 colours
+            # this is because with 2-we have no control over the midpoint
+            # obviously if n_colours==1 these are all the same;
+            # n_colours==2 implies c1 and c2 are the same so midpoint is between c2 and c3
+            colourscale = [
+                [0.0, art.hex_to_rgba_str(c1, opacity=o1)],
+                [scale_mid, art.hex_to_rgba_str(c2, opacity=o2)],
+                [1.0, art.hex_to_rgba_str(c3, opacity=o3)],
+            ]
+
 
 with st.sidebar:
+
     st.markdown("### Contour")
     metres_per_contour = st.slider("metres per contour", 5.0, 100.0, 20.0, step=5.0)
     contour_width = st.slider("contour width", 0.0, 1.0, 0.25, step=0.01)
@@ -210,54 +235,26 @@ with st.sidebar:
     with cols[1]:
         contour_opacity = st.slider("contour opacity", 0.0, 1.0, 0.35, step=0.01)
 
-def hex_to_rgba_str(hex_color: str, opacity: float = 0.5) -> str:
-    """
-    Convert hex color to rgba() string.
-
-    Parameters
-    ----------
-    hex_color : str
-        '#RRGGBB' or 'RRGGBB'
-    opacity : float, optional
-        Alpha in [0, 1], default 0.5
-
-    Returns
-    -------
-    str
-        'rgba(r, g, b, a)'
-    """
-    hex_color = hex_color.lstrip("#")
-
-    if len(hex_color) != 6:
-        raise ValueError("hex_color must be in format #RRGGBB")
-
-    r = int(hex_color[0:2], 16)
-    g = int(hex_color[2:4], 16)
-    b = int(hex_color[4:6], 16)
-
-    opacity = max(0.0, min(1.0, opacity))  # clamp
-    return f"rgba({r}, {g}, {b}, {opacity})"
-
 with tabs[1]:
-
-    # for the colourscale we always use 3 colours
-    # this is because with 2-we have no control over the midpoint
-    # obviously if n_colours==1 these are all the same;
-    # n_colours==2 implies c1 and c2 are the same so midpoint is between c2 and c3
-    colourscale = [
-        [0.0, hex_to_rgba_str(c1, opacity=o1)],
-        [scale_mid, hex_to_rgba_str(c2, opacity=o2)],
-        [1.0, hex_to_rgba_str(c3, opacity=o3)],
-    ]
-
 
     fig = art.plot_contour(
         colorscale=colourscale,
         showscale=False,
         metres_per_contour=metres_per_contour,
         contour_width=contour_width,
-        contour_colour=hex_to_rgba_str(contour_colour, contour_opacity),
+        contour_colour=art.hex_to_rgba_str(contour_colour, contour_opacity),
     )
+
+    if st.sidebar.button(
+            "confirm center",
+            type="secondary",
+            help="validate centroids; will show X as paper centre & O as target lat / long",
+    ):
+        # add an X in the centre of the plotly plot by paper reference,
+        # then add an O at the target x and y co-ordinates (which are the lattitude and longitude)
+        fig.add_annotation(x=0.5, xref="paper", y=0.5, yref="paper", text="X", showarrow=False)
+        fig.add_annotation(x=art.centre["lon"], y=art.centre["lat"], text="O", showarrow=False)
+
 
     st.plotly_chart(
         fig,

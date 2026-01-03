@@ -191,6 +191,35 @@ class TopoArt:
         ncontours = max(1, int(np.floor((zmax - zmin) / metres_per_contour)))
         return zmin, zmax, ncontours
 
+    @staticmethod
+    def hex_to_rgba_str(hex_color: str, opacity: float = 0.5) -> str:
+        """
+        Convert hex color to rgba() string.
+
+        Parameters
+        ----------
+        hex_color : str
+            '#RRGGBB' or 'RRGGBB'
+        opacity : float, optional
+            Alpha in [0, 1], default 0.5
+
+        Returns
+        -------
+        str
+            'rgba(r, g, b, a)'
+        """
+        hex_color = hex_color.lstrip("#")
+
+        if len(hex_color) != 6:
+            raise ValueError("hex_color must be in format #RRGGBB")
+
+        r = int(hex_color[0:2], 16)
+        g = int(hex_color[2:4], 16)
+        b = int(hex_color[4:6], 16)
+
+        opacity = max(0.0, min(1.0, opacity))  # clamp
+        return f"rgba({r}, {g}, {b}, {opacity})"
+
 
     def plot_contour(
             self,
