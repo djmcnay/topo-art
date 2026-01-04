@@ -7,6 +7,7 @@ import numpy as np
 from PIL import Image
 from dotenv import load_dotenv
 import plotly.graph_objects as go
+from typing import List, Tuple
 
 
 class TopoArt:
@@ -24,11 +25,20 @@ class TopoArt:
             mapbox_token = os.getenv("MAPBOX_TOKEN", None)
         self.mapbox_token = mapbox_token
 
-        #
+        # critical co-ordinates
         self.centre: tuple = None
         self.bbox: tuple | list = None
         self.Z: np.ndarray = None
         self.zoom: int = None
+
+        # plot parameters
+        self.metres_per_contour: float = 20.0
+        self.contour_width: float = 0.5
+        self.contour_colour: str = "rgba(0, 0, 0, 0.15)"
+        self.colour_scale: str | list = "Tealrose"
+
+        # actual plot
+        self.fig: go.Figure = None
 
 
     def load_geojson(self, json_path):
@@ -47,14 +57,22 @@ class TopoArt:
         """
 
         # Save as JSON (simple container, not true GeoJSON)
-        payload = {
+        payload_map = {
+            "centre": self.centre,
             "bbox": list(self.bbox),
             "zoom": self.zoom,
             "z": self.Z.tolist(),
         }
 
+        payload_plot = {
+            "colour_scale": self.colour_scale,
+            "contour_colour": self.contour_colour,
+            "metres_per_contour": self.metres_per_contour,
+            "contour_width": self.contour_width,
+        }
+
         with open(json_path, "w") as f:
-            json.dump(payload, f)
+            json.dump(payload_map | payload_plot, f)
 
 
     def bbox_from_coords(self, lon: float, lat: float, size_km: float = 0.2, aspect: list = (150, 80)):
@@ -171,7 +189,6 @@ class TopoArt:
 
         self.Z = Z
 
-
     def contour_config_from_interval(self, metres_per_contour, z_clip_min=None, z_clip_max=None):
         """
         From an elevation grid Z (metres), work out zmin, zmax and ncontours
@@ -221,22 +238,93 @@ class TopoArt:
         return f"rgba({r}, {g}, {b}, {opacity})"
 
 
+    def colour_scale_from_hex(
+            self,
+            c_low: str, o_low: float = 0.5,
+            midpoint: float = 0.5,
+            c_mid: str = None, c_high: str = None,
+            o_mid: float = None, o_high: float = None,
+            update_self: bool = True,
+    ) -> list:
+        """
+        Creates a Plotly colourscale from three hex colours & opacity values.
+
+        Doesn't specifically need to be a 3-colour scale, could be 1-3.
+        If 1, then we just set colour low for all 3.
+        If 2, then we set colur mid to colour low - there is logic to this because it still allows for a midpoint.
+
+        Args:
+            c_low: hex colour string, e.g. '#000000'
+            c_mid: hex colour string, e.g. '#FFFFFF' (optional)
+            c_high: hex colour string, e.g. '#FFFFFF' (optional)
+            midpoint: float between 0 and 1, e.g. 0.5
+            o_low, o_mid, o_high: float between 0 and 1, e.g. 0.5
+
+        Returns:
+            List[Tuple[float, str]]: list of tuples of (value, colour)
+
+        """
+
+        # update colour to match c1 if missing
+        c_mid = c_low if c_mid is None else c_mid
+        c_high = c_low if c_high is None else c_high
+
+        # update opacity to match o1 if missing
+        o_mid = o_low if o_mid is None else o_mid
+        o_high = o_low if o_high is None else o_high
+
+        colour_scale = [
+            (0.0, self.hex_to_rgba_str(c_low, o_low)),
+            (midpoint, self.hex_to_rgba_str(c_mid, o_mid)),
+            (1.0, self.hex_to_rgba_str(c_high, o_high))
+        ]
+
+        # update stored value
+        if update_self:
+            self.colour_scale = colour_scale
+            return self.colour_scale
+        else:
+            return colour_scale
+
+    def contour_from_hex(self, colour: str, opacity: float = 0.5, update_self: bool = True):
+        """ Update contour colour from hex colour string."""
+        rgba_colour = self.hex_to_rgba_str(colour, opacity)
+        if update_self:
+            self.contour_colour = rgba_colour
+            return self.contour_colour
+        else:
+            return rgba_colour
+
     def plot_contour(
             self,
-            colorscale="Viridis",
-            showscale=False,
-            metres_per_contour=25,
-            contour_width=0.5,
-            contour_colour="rgba(0, 0, 0, 0.15)",
-            title=None,
+            colorscale=None,
+            metres_per_contour=None,
+            contour_width=None,
+            contour_colour=None,
+            update_params: bool = True,
     ):
         """
         Plot an elevation grid as a filled contour plot using Plotly,
         with the correct geographic aspect ratio.
         """
+
+        # parameters required to stored internally
         min_lon, min_lat, max_lon, max_lat = self.bbox
         h, w = self.Z.shape
 
+        # optional from self
+        colorscale = colorscale if colorscale is not None else self.colour_scale
+        metres_per_contour = metres_per_contour if metres_per_contour is not None else self.metres_per_contour
+        contour_width = contour_width if contour_width is not None else self.contour_width
+        contour_colour = contour_colour if contour_colour is not None else self.contour_colour
+
+        if update_params:
+            self.metres_per_contour = metres_per_contour
+            self.contour_width = contour_width
+            self.contour_colour = contour_colour
+            self.colour_scale = colorscale
+
+        #
         _, _, n_contours = self.contour_config_from_interval(
             metres_per_contour=metres_per_contour,
         )
@@ -259,7 +347,7 @@ class TopoArt:
                     width=contour_width,
                     color=contour_colour,
                 ),
-                showscale=showscale,
+                showscale=False,
                 ncontours=n_contours,
             )
         )
@@ -274,7 +362,11 @@ class TopoArt:
             margin=dict(l=0, r=0, t=0, b=0),
         )
 
-        return fig
+        if update_params:
+            self.fig = fig
+            return self.fig
+        else:
+            return fig
 
 # --- Example usage for your Skye bbox ---
 
@@ -291,28 +383,3 @@ if __name__ == "__main__":
     zoom = 13
 
     print(art.mapbox_bbox_from_coords(-6.088117854601649, 57.209790, 0.2))
-
-    # cache_path = "skye_contours.geojson"
-    #
-    # if not os.path.exists(cache_path):
-    #     Z = mapbox_geojson_from_bbox(skye_bbox, zoom, cache_path, downsample=1)
-    # else:
-    #     Z, _, _ = load_geojson(cache_path)
-    #
-    # custom_colorscale = [
-    #     [0.0, "rgba(0, 128, 128, 0.15)"],  # teal, semi-transparent
-    #     [0.2, "rgba(255, 255, 255, 0.25)"],  # white
-    #     [1.0, "rgba(128,   0, 128, 0.3)"]  # purple
-    # ]
-    #
-    # fig = plot_contour(
-    #     Z,
-    #     bbox=skye_bbox,
-    #     colorscale=custom_colorscale,
-    #     showscale=False,
-    #     title="Skye elevation art",
-    # )
-    #
-    # fig.show()
-    #
-    # fig.write_image("skye_contours.svg", scale=2.0)

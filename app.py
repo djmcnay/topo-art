@@ -8,6 +8,9 @@ from streamlit_folium import st_folium
 from mapbox_topo_art import TopoArt
 import streamlit_authenticator as stauth
 from streamlit_authenticator.utilities import LoginError
+from dotenv import load_dotenv
+
+# %% Streamlit Page Config, Title & Validation Checks
 
 # set app config stuff... can't be bothered to make it too pretty
 st.set_page_config(
@@ -15,6 +18,15 @@ st.set_page_config(
     page_title="Topo Art",
     page_icon="🗺️",
 )
+
+# Page title
+st.title("Topo Art")
+
+# Validate Env Variables
+load_dotenv()
+assert "MAPBOX_TOKEN" in os.environ, "MAPBOX_TOKEN environment variable not set"
+
+# %% App Authentication
 
 # Load authenticator config file: containes usernames and hashed passwords
 with open('./.streamlit/auth_config.yaml') as file:
@@ -46,11 +58,7 @@ with open('./.streamlit/auth_config.yaml') as file:
 #     st.error("Username/password is incorrect")
 #     st.stop()
 
-# Validate Env Variables
-assert "MAPBOX_TOKEN" in os.environ, "MAPBOX_TOKEN environment variable not set"
-
-# Page title
-st.title("Topo Art")
+# %% Cached Resources & Session State variables
 
 @st.cache_resource
 def init_topo_art():
@@ -67,34 +75,55 @@ if 'map_zoom' not in st.session_state:
 if 'map_center' not in st.session_state:
     st.session_state['map_center'] = [0, 0]
 
+# %% App: layout
+
+tabs = st.tabs(["Map", "Topo Graph"])
+
+# %% App: Map, Central Point and Bounding Box Data
+
 # inputs: determine the width, height and grid-square size
 with st.sidebar:
 
     st.markdown("### Map Settings")
 
+
+    default_size_options = {
+        "desktop": (150.0, 80.0, 0.15),
+        "A3": (42.0, 29.7, 0.15),
+        "A2": (59.4, 42.0, 0.15),
+        "A1": (84.1, 59.4, 0.15),
+        "A0": (118.9, 84.1, 0.15),
+    }
+
+    default_size = st.selectbox(
+        "Default Sizing",
+        default_size_options.keys(),
+        index=0,
+    )
+
     cols = st.columns(3)
     with cols[0]:
         width = st.number_input(
             "width",
-            value=150,
-            min_value=50,
-            max_value=200,
+            value=default_size_options[default_size][0],
+            min_value=1.0,
+            max_value=1000.0,
             help="width of desktop in cm",
         )
     with cols[1]:
         height = st.number_input(
             "height",
-            value=80,
-            min_value=50,
-            max_value=200,
+            value=default_size_options[default_size][1],
+            min_value=1.0,
+            max_value=1000.0,
             help="height of desktop in cm",
         )
     with cols[2]:
         grid_size = st.number_input(
             "grid size",
-            value=0.15,
+            value=default_size_options[default_size][2],
             min_value=0.01,
-            max_value=10.0,
+            max_value=100.0,
             help="size of grid squares in km i.e. 0.2 implies 1cm is 200m x 200m",
         )
 
@@ -137,8 +166,6 @@ if art.centre is not None:
     ).add_to(m)
 
 
-tabs = st.tabs(["Map", "Topo Graph"])
-
 # Render map & capture clicks
 with tabs[0]:
 
@@ -167,10 +194,13 @@ with st.sidebar:
     if st.button("Download GeoJSON", use_container_width=True, type="primary"):
         art.mapbox_geojson_from_bbox(zoom=11)
 
+# If there is no elevation data then stop running the app
 if art.Z is None:
     st.stop()
 
-with st.sidebar:
+# %% App: Topo Art itself
+
+with (st.sidebar):
 
     st.markdown("### Colour scale")
 
@@ -186,7 +216,7 @@ with st.sidebar:
 
     # dropdown menu to select colour scale; set colourscale
     dd_colour_scales = st.selectbox("Colour Scale", colour_scale_options, index=0)
-    colourscale = dd_colour_scales
+    art.colour_scale = dd_colour_scales
 
     # only if we have selected Artemis Custom do we need all the rest of the selection faff
     # in the fullness of time we can param this into a widget if required
@@ -251,44 +281,41 @@ with st.sidebar:
             # this is because with 2-we have no control over the midpoint
             # obviously if n_colours==1 these are all the same;
             # n_colours==2 implies c1 and c2 are the same so midpoint is between c2 and c3
-            colourscale = [
-                [0.0, art.hex_to_rgba_str(c1, opacity=o1)],
-                [scale_mid, art.hex_to_rgba_str(c2, opacity=o2)],
-                [1.0, art.hex_to_rgba_str(c3, opacity=o3)],
-            ]
+            art.colour_scale_from_hex(
+                c_low=c1, o_low=o1,
+                c_mid=c2, o_mid=o2,
+                c_high=c3, o_high=o3,
+                midpoint=scale_mid
+            )
 
 
 with st.sidebar:
 
     st.markdown("### Contour")
-    metres_per_contour = st.slider("metres per contour", 5.0, 100.0, 20.0, step=5.0)
-    contour_width = st.slider("contour width", 0.0, 1.0, 0.25, step=0.01)
+    art.metres_per_contour = st.slider("metres per contour", 5.0, 100.0, 20.0, step=5.0)
+    art.contour_width = st.slider("contour width", 0.0, 1.0, 0.25, step=0.01)
 
+    # set contour colour and opacity
     cols = st.columns(2)
     with cols[0]:
         contour_colour = st.color_picker("contour colour", value="#000000")
     with cols[1]:
         contour_opacity = st.slider("contour opacity", 0.0, 1.0, 0.35, step=0.01)
 
-with tabs[1]:
+    # set the internal RGBA contour colour
+    art.contour_from_hex(contour_colour, contour_opacity)
 
-    fig = art.plot_contour(
-        colorscale=colourscale,
-        showscale=False,
-        metres_per_contour=metres_per_contour,
-        contour_width=contour_width,
-        contour_colour=art.hex_to_rgba_str(contour_colour, contour_opacity),
-    )
+# %% Create Figure
 
-    if st.sidebar.button(
-            "confirm center",
-            type="secondary",
-            help="validate centroids; will show X as paper centre & O as target lat / long",
-    ):
-        # add an X in the centre of the plotly plot by paper reference,
-        # then add an O at the target x and y co-ordinates (which are the lattitude and longitude)
-        fig.add_annotation(x=0.5, xref="paper", y=0.5, yref="paper", text="X", showarrow=False)
-        fig.add_annotation(x=art.centre["lon"], y=art.centre["lat"], text="O", showarrow=False)
+fig = art.plot_contour()
+
+# %% Saving and Validation
+
+with st.sidebar:
+
+    st.markdown("### Saving & Validation")
+
+    save_format = st.selectbox("save format", ("svg", "png"), index=0)
 
     # scaling factor for image export
     n_scale = st.sidebar.number_input(
@@ -300,14 +327,51 @@ with tabs[1]:
         help="scale multiplier when downloading SVG image",
     )
 
+    with st.expander("Advanced Settings", expanded=False):
+
+        pixels_per_cm = st.number_input(
+            "pixels per cm",
+            value=37.8,
+            help="Assuming a standard 96 DPI (dots per inch), converted to cm; 96 pixels/inch ÷ 2.54cm = 37.8 pixels/cm"
+        )
+
+        if st.button(
+                "confirm center",
+                type="secondary",
+                use_container_width=True,
+                help="validate centroids; will show X as paper centre & O as target lat / long",
+        ):
+            # add an X in the centre of the plotly plot by paper reference,
+            # then add an O at the target x and y co-ordinates (which are the lattitude and longitude)
+            fig.add_annotation(x=0.5, xref="paper", y=0.5, yref="paper", text="X", showarrow=False)
+            fig.add_annotation(x=art.centre["lon"], y=art.centre["lat"], text="O", showarrow=False)
+
+        if st.button(
+                "clear cache",
+                type="secondary",
+                use_container_width=True,
+                help="clears centre, bbox, elevation data & zoom from the art object; requires fresh data call.",
+        ):
+            art.centre = None
+            art.bbox = None
+            art.Z = None
+            art.zoom = None
+            st.rerun()
+
+
+with tabs[1]:
+
     st.plotly_chart(
         fig,
         use_container_width=False,
         config = {
           'toImageButtonOptions': {
-            'format': 'svg',
+            'format': save_format,
             'filename': 'topo_art',
+            'height': int(height * pixels_per_cm),
+            'width': int(width * pixels_per_cm),
             'scale': n_scale}
         }
     )
+
 
