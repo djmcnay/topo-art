@@ -1,4 +1,5 @@
 # app.py
+import json
 import os
 import yaml
 import pandas as pd
@@ -10,27 +11,49 @@ import streamlit_authenticator as stauth
 from streamlit_authenticator.utilities import LoginError
 from dotenv import load_dotenv
 
-# %% Streamlit Page Config, Title & Validation Checks
+# %% Streamlit Page Config
 
-# set app config stuff... can't be bothered to make it too pretty
-st.set_page_config(
-    layout="centered",
-    page_title="Topo Art",
-    page_icon="🗺️",
-)
-
-# Page title
+# set page config (first) and give the page a title
+st.set_page_config(layout="centered", page_title="Topo Art", page_icon="🗺️")
 st.title("Topo Art")
 
-# Validate Env Variables
-load_dotenv()
-assert "MAPBOX_TOKEN" in os.environ, "MAPBOX_TOKEN environment variable not set"
+# %% Default Variables: define upfront but can be updated via loading saved object
+
+# originally main desk size David wants
+# now including important paper sizes
+default_size_options = {
+    "desktop X Large": (150.0, 80.0, 0.15),
+    "A3": (42.0, 29.7, 0.15),
+    "A2": (59.4, 42.0, 0.15),
+    "A1": (84.1, 59.4, 0.15),
+    "A0": (118.9, 84.1, 0.15),
+    "desktop Large": (140.0, 70.0, 0.15),
+    "desktop Standard": (120.0, 60.0, 0.15),
+    "desktop Deep": (140.0, 80.0, 0.15),
+    "desktop Compact": (100.0, 50.0, 0.15),
+}
+
+# selection of colour scales:
+# Custom is where we build our own (default state)
+# Others are imported from Plotly
+colour_scale_options = (
+    "Custom",
+    "Viridis",
+    "Tealrose",
+    "Tealrose_r"
+)
+
+default_custom_scale = [
+    (0.0, "rgba(0, 128, 128, 0.5)"),
+    (0.25, "rgba(255, 255, 255, 0.5)"),
+    (1.0, "rgba(128, 0, 128, 0.5)"),
+]
 
 # %% App Authentication
 
-# Load authenticator config file: containes usernames and hashed passwords
-with open('./.streamlit/auth_config.yaml') as file:
-    config = yaml.load(file, Loader=yaml.loader.SafeLoader)
+# # Load authenticator config file: containes usernames and hashed passwords
+# with open('./.streamlit/auth_config.yaml') as file:
+#     config = yaml.load(file, Loader=yaml.loader.SafeLoader)
 
 # # Initialize authenticator
 # authenticator = stauth.Authenticate(
@@ -77,7 +100,38 @@ if 'map_center' not in st.session_state:
 
 # %% App: layout
 
-tabs = st.tabs(["Map", "Topo Graph"])
+tabs = st.tabs(["Map", "Topo Graph", "Load Saved Work"])
+
+# start with load saved work
+# this updates art with saved data but also overrides some app default params,
+# for example, the colour scale
+with tabs[2]:
+
+    st.markdown(f"""
+    ### Load Saved Work
+    Need to be very specific, this is only for GeoJSON files saved from the Topo Graph tab.
+    Those are JSON files containing centre, bbox, elevation data and zoom level for the map, 
+    they also contain the colour scale and contour settings for the artwork.
+    """)
+
+    uploaded_file = st.file_uploader(
+        "Upload GeoJSON file",
+        type=["geojson", "json"],
+        accept_multiple_files=False,
+        help="Upload a very specific GeoJSON file containing map and art data to load into the app.",
+    )
+
+    if uploaded_file is not None:
+
+        # read the file and use built in function to update params in art
+        file_content = uploaded_file.read()
+        art.load_geojson_from_stream(content=file_content)
+
+        # remember that colour_scale can be Custom or Named,
+        # Named is a string like 'Tealrose' but Custom needs to be List[Tuple[Float, Str(RGBA)]]
+        # So if the colour scale uploaded to art is a list then override the defaults for the colour_scale
+        if isinstance(art.colour_scale, list):
+            default_custom_scale = art.colour_scale
 
 # %% App: Map, Central Point and Bounding Box Data
 
@@ -86,21 +140,10 @@ with st.sidebar:
 
     st.markdown("### Map Settings")
 
+    # the default size dropdown for the main sizes used for desks and artwork
+    default_size = st.selectbox("Default Sizing", default_size_options.keys(), index=0,)
 
-    default_size_options = {
-        "desktop": (150.0, 80.0, 0.15),
-        "A3": (42.0, 29.7, 0.15),
-        "A2": (59.4, 42.0, 0.15),
-        "A1": (84.1, 59.4, 0.15),
-        "A0": (118.9, 84.1, 0.15),
-    }
-
-    default_size = st.selectbox(
-        "Default Sizing",
-        default_size_options.keys(),
-        index=0,
-    )
-
+    # width, height and granularity
     cols = st.columns(3)
     with cols[0]:
         width = st.number_input(
@@ -127,60 +170,52 @@ with st.sidebar:
             help="size of grid squares in km i.e. 0.2 implies 1cm is 200m x 200m",
         )
 
-# Choose the initial map centre
-if art.centre is not None:
-    map_center = [art.centre["lat"], art.centre["lon"]]
-else:
-    map_center = [51.4266, 0]
-
-zoom = st.session_state["map_zoom"]
-
-# create a map and allow Lat/Lon popups on click
-m = folium.Map(location=map_center, zoom_start=zoom, tiles="OpenStreetMap",)
-m.add_child(folium.LatLngPopup())
-
-# If we have a centre, draw marker + bbox rectangle
-if art.centre is not None:
-
-    lat_c, lon_c = art.centre["lat"], art.centre["lon"]
-
-    # marker at centre
-    folium.Marker(
-        location=[lat_c, lon_c],
-        popup=f"Centre: {lat_c:.4f}, {lon_c:.4f}",
-    ).add_to(m)
-
-    # compute bbox using art & draw rectangle
-    min_lon, min_lat, max_lon, max_lat = art.bbox_from_coords(
-        lon=lon_c,
-        lat=lat_c,
-        size_km=grid_size,
-        aspect=(width, height),
-    )
-
-    folium.Rectangle(
-        bounds=[[min_lat, min_lon], [max_lat, max_lon]],    # note: (lat, lon) order for Folium
-        color="red",
-        weight=2,
-        fill=False,
-    ).add_to(m)
-
+# %% Map Tab
 
 # Render map & capture clicks
 with tabs[0]:
 
+    # Choose the initial map centre: otherwise default to London
+    map_center = [51.4266, 0] if art.centre is not None else [art.centre["lat"], art.centre["lon"]]
+    zoom = st.session_state["map_zoom"]
+
+    # create a map and allow Lat/Lon popups on click
+    m = folium.Map(location=map_center, zoom_start=zoom, tiles="OpenStreetMap",)
+    m.add_child(folium.LatLngPopup())
+
+    # If we have a centre, draw marker + bbox rectangle
+    if art.centre is not None:
+        lat_c, lon_c = art.centre["lat"], art.centre["lon"]
+
+        # marker at centre
+        folium.Marker(location=[lat_c, lon_c], popup=f"Centre: {lat_c:.4f}, {lon_c:.4f}").add_to(m)
+
+        # compute bbox using art & draw rectangle
+        min_lon, min_lat, max_lon, max_lat = art.bbox_from_coords(
+            lon=lon_c,
+            lat=lat_c,
+            size_km=grid_size,
+            aspect=(width, height),
+        )
+
+        folium.Rectangle(
+            bounds=[[min_lat, min_lon], [max_lat, max_lon]],  # note: (lat, lon) order for Folium
+            color="red",
+            weight=2,
+            fill=False,
+        ).add_to(m)
+
+    # streamlit Folium map object... the actual map
     st_data = st_folium(m, width=900, height=550)
 
     if art.centre is not None:
-        st.markdown(
-            f"Centre: {map_center[0]:.4f}, {map_center[1]:.4f}; Bounding Box: {[f'{i:.4f}' for i in art.bbox]}",
-        )
+        st.markdown(f"Centre: {map_center[0]:.4f}, {map_center[1]:.4f}; BBox: {[f'{i:.4f}' for i in art.bbox]}")
 
     # Update centre on click (and cause rerun -> rectangle updates)
+    # Utility here is to store the zoom level and centres when we click
+    # Streamlit must be re-run, and we don't want the map to move from the current view
     if st_data:
-
         if st_data.get("last_clicked"):
-
             if "zoom" in st_data:
                 st.session_state["map_zoom"] = st_data["zoom"]
 
@@ -190,11 +225,12 @@ with tabs[0]:
             }
             st.rerun()
 
+# Make Call to Mapbox API
 with st.sidebar:
-    if st.button("Download GeoJSON", use_container_width=True, type="primary"):
+    if st.button("Download GeoJSON", width="stretch", type="primary"):
         art.mapbox_geojson_from_bbox(zoom=11)
 
-# If there is no elevation data then stop running the app
+# If there is no elevation data, then stop running the app
 if art.Z is None:
     st.stop()
 
@@ -204,47 +240,53 @@ with (st.sidebar):
 
     st.markdown("### Colour scale")
 
-    # selection of colour scales:
-    # Artemis Custom is where we build our own
-    # Others are imported from Plotly
-    colour_scale_options = (
-        "Artemis Custom",
-        "Viridis",
-        "Tealrose",
-        "Tealrose_r"
-    )
-
     # dropdown menu to select colour scale; set colourscale
-    dd_colour_scales = st.selectbox("Colour Scale", colour_scale_options, index=0)
+    # this is oddly complicated - the options are above, but Custom means a bespoke scale
+    # because we can load the default (could be a saved name) or we could be working in bespoke space
+    # if bespoke we need to check it's a list (not a string) and then name it "Custom"
+    dd_colour_scales = st.selectbox(
+        "Colour Scale",
+        colour_scale_options,
+        index=colour_scale_options.index("Custom" if isinstance(art.colour_scale, list) else art.colour_scale),
+    )
     art.colour_scale = dd_colour_scales
 
-    # only if we have selected Artemis Custom do we need all the rest of the selection faff
+    # only if we have selected Custom do we need all the rest of the selection faff
     # in the fullness of time we can param this into a widget if required
-    if dd_colour_scales == "Artemis Custom":
+    if dd_colour_scales == "Custom":
 
             # find how many colours we are having in the colour gradient [max 3]
-            n_colours = st.slider("number of colours", 1, 3, 3, step=1)
+            # won't work properly when reloading saved data
+            n_colours = st.slider("number of colours", 1, 3, len(default_custom_scale), step=1)
+
+            # this is a hack to get a list of the hex codes and opacities from the rgba codes
+            # remember a colour scale will be like [(0.0, 'rgba(r, g, b, a)')]
+            # so we use that to extract the hex from rgba and the opacity
+            # these then become the defaults for the colour picker & the input to the opacity dataframe
+            hex_opacity = []
+            for i, v in enumerate(default_custom_scale):
+                ci, oi = art.rgba_to_hex_and_opacity(v[1])
+                hex_opacity.append((ci, oi))
 
             # widget for colour pickers (with defaults)
             cols = st.columns(3)
             with cols[0]:
                 # must always have at least `1-colour & c1 is the primary
-                c1 = st.color_picker("low", value="#008080")
+                c1 = st.color_picker("low", value=hex_opacity[0][0])
             with cols[1]:
-
                 # only require the mid-colour in a 3-point scale
                 # in a 2-point scale we just set mid as c1
-                c2 = st.color_picker("mid", value="#FFFFFF") if n_colours == 3 else c1
+                c2 = st.color_picker("mid", value=hex_opacity[1][0]) if n_colours == 3 else c1
             with cols[2]:
-
                 # for high, we need it for 2 or 3 colours
                 # set as c1 only picking a single colour
-                c3 = c1 if n_colours == 1 else st.color_picker("high", value="#800080")
+                c3 = c1 if n_colours == 1 else st.color_picker("high", value=hex_opacity[2][0])
 
             # Initial values for the opacities
+            # use the hex_opacity list (above) which is created from the rgba colour scale
             opacity_df = pd.DataFrame({
                 'point': ['low', 'mid', 'high'],
-                'opacity': [0.5, 0.5, 0.5]
+                'opacity': [i[1] for i in hex_opacity]
             })
 
             # Use data editor to adjust all three values in one place
@@ -261,7 +303,7 @@ with (st.sidebar):
                     ),
                 },
                 hide_index=True,
-                use_container_width=True
+                width='stretch',
             )
 
             # Get the three opacity values
@@ -275,7 +317,14 @@ with (st.sidebar):
             elif n_colours == 2:
                 o3 = o1
 
-            scale_mid = st.slider("midpoint", 0.0, 1.0, 0.25, step=0.01)
+            # we can pick the default value from the 2nd entry in the scale
+            scale_mid = st.slider(
+                "midpoint",
+                0.0,
+                1.0,
+                value=default_custom_scale[1][0],
+                step=0.01,
+            )
 
             # for the colourscale we always use 3 colours
             # this is because with 2-we have no control over the midpoint
@@ -292,15 +341,22 @@ with (st.sidebar):
 with st.sidebar:
 
     st.markdown("### Contour")
-    art.metres_per_contour = st.slider("metres per contour", 5.0, 100.0, 20.0, step=5.0)
-    art.contour_width = st.slider("contour width", 0.0, 1.0, 0.25, step=0.01)
+
+    # streamlit inputs for meters per contour & contour width; updated from art
+    mpc = st.slider("metres per contour", 5.0, 100.0, art.metres_per_contour, step=5.0)
+    contour_width = st.slider("contour width", 0.0, 1.0, art.contour_width, step=0.01)
+
+    # update art with the streamlit elements
+    art.metres_per_contour = mpc
+    art.contour_width = contour_width
 
     # set contour colour and opacity
     cols = st.columns(2)
+    c_hex, c_opacity = art.rgba_to_hex_and_opacity(art.contour_colour)
     with cols[0]:
-        contour_colour = st.color_picker("contour colour", value="#000000")
+        contour_colour = st.color_picker("contour colour", value=c_hex)
     with cols[1]:
-        contour_opacity = st.slider("contour opacity", 0.0, 1.0, 0.35, step=0.01)
+        contour_opacity = st.slider("contour opacity", 0.0, 1.0, value=c_opacity, step=0.01)
 
     # set the internal RGBA contour colour
     art.contour_from_hex(contour_colour, contour_opacity)
@@ -313,21 +369,19 @@ fig = art.plot_contour()
 
 with st.sidebar:
 
-    st.markdown("### Saving & Validation")
-
-    save_format = st.selectbox("save format", ("svg", "png"), index=0)
-
-    # scaling factor for image export
-    n_scale = st.sidebar.number_input(
-        "scale factor",
-        min_value=1,
-        max_value=10,
-        value=2,
-        step=1,
-        help="scale multiplier when downloading SVG image",
-    )
-
     with st.expander("Advanced Settings", expanded=False):
+
+        save_format = st.selectbox("save format", ("svg", "png"), index=0)
+
+        # scaling factor for image export
+        n_scale = st.sidebar.number_input(
+            "scale factor",
+            min_value=1,
+            max_value=10,
+            value=2,
+            step=1,
+            help="scale multiplier when downloading SVG image",
+        )
 
         pixels_per_cm = st.number_input(
             "pixels per cm",
@@ -338,7 +392,7 @@ with st.sidebar:
         if st.button(
                 "confirm center",
                 type="secondary",
-                use_container_width=True,
+                width="stretch",
                 help="validate centroids; will show X as paper centre & O as target lat / long",
         ):
             # add an X in the centre of the plotly plot by paper reference,
@@ -349,7 +403,7 @@ with st.sidebar:
         if st.button(
                 "clear cache",
                 type="secondary",
-                use_container_width=True,
+                width="stretch",
                 help="clears centre, bbox, elevation data & zoom from the art object; requires fresh data call.",
         ):
             art.centre = None
@@ -358,12 +412,13 @@ with st.sidebar:
             art.zoom = None
             st.rerun()
 
+# %% Art Tab
 
 with tabs[1]:
 
     st.plotly_chart(
         fig,
-        use_container_width=False,
+        width="stretch",
         config = {
           'toImageButtonOptions': {
             'format': save_format,
@@ -374,4 +429,12 @@ with tabs[1]:
         }
     )
 
+    geojson = art.payload_geojson()
 
+    if st.download_button(
+            "save GeoJson",
+            data=json.dumps(geojson),
+            file_name="topo_art.geojson",
+            mime="application/json",
+    ):
+        st.success(f"saved to topo_art.geojson")

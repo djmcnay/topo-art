@@ -35,33 +35,120 @@ class TopoArt:
         self.metres_per_contour: float = 20.0
         self.contour_width: float = 0.5
         self.contour_colour: str = "rgba(0, 0, 0, 0.15)"
-        self.colour_scale: str | list = "Tealrose"
+        self.colour_scale: str | list = [
+            (0.0, "rgba(0, 128, 128, 0.5)"),
+            (0.25, "rgba(255, 255, 255, 0.5)"),
+            (1.0, "rgba(128, 0, 128, 0.5)")
+        ]
 
         # actual plot
         self.fig: go.Figure = None
 
+    @property
+    def metres_per_contour(self):
+        return self._metres_per_contour
+    @metres_per_contour.setter
+    def metres_per_contour(self, value):
+        try:
+            self._metres_per_contour = float(value)
+        except Exception as e:
+            raise TypeError("metres_per_contour must be a float") from e
+
+    @property
+    def contour_width(self):
+        return self._contour_width
+    @contour_width.setter
+    def contour_width(self, value):
+        try:
+            self._contour_width = float(value)
+        except Exception as e:
+            raise TypeError("contour_width must be a float") from e
+
+
+
+    @property
+    def centre(self):
+        return self._centre
+
+    @centre.setter
+    def centre(self, value):
+        if value is None or isinstance(value, dict):
+            self._centre = value
+        else:
+            raise TypeError("centre must be a dict with keys lon and lat")
+
+    @property
+    def bbox(self):
+        return self._bbox
+
+    @bbox.setter
+    def bbox(self, value):
+        if value is None:
+            self._bbox = value
+        elif isinstance(value, (list, tuple)):
+            self._bbox = tuple(float(v) for v in value)
+        else:
+            raise TypeError("bbox must be a list or tuple of (min_lon, min_lat, max_lon, max_lat)")
+
+    @property
+    def Z(self):
+        return self._Z
+
+    @Z.setter
+    def Z(self, value):
+        if value is None:
+            self._Z = value
+        else:
+            try:
+                self._Z = np.array(value, dtype=float)
+            except Exception as e:
+                raise TypeError("Z must be a numpy array of floats") from e
+
+    @property
+    def zoom(self):
+        return self._zoom
+
+    @zoom.setter
+    def zoom(self, value):
+        if value is None:
+            self._zoom = value
+        else:
+            try:
+                self._zoom = int(value)
+            except Exception as e:
+                raise TypeError("zoom must be an integer") from e
+
+
+
+
+    def _load_from_payload(self, payload: dict):
+        """ iterates over items in the (json) payload and will overwrite if class already has that attribute """
+        for k, v in payload.items():
+            if hasattr(self, k):
+                print(f"Overwriting {k} from payload")
+                setattr(self, k, v)
+
+    def load_geojson_from_stream(self, content: str):
+        """ Built for Streamlit, loads cached data """
+        payload = json.loads(content)
+        self._load_from_payload(payload)
 
     def load_geojson(self, json_path):
-        """
-        Load a cached elevation grid from JSON and return (Z, bbox, zoom).
-        """
+        """ Load a cached elevation grid from JSON and return (Z, bbox, zoom)."""
         with open(json_path, "r") as f:
             payload = json.load(f)
+        self._load_from_payload(payload)
 
-        self.Z = np.array(payload["z"], dtype=float)
-        self.bbox = tuple(payload["bbox"])
-        self.zoom = payload["zoom"]
 
-    def save_geojson(self, json_path: str = "topo_art.geojson"):
-        """
-        """
+    def payload_geojson(self):
+        """ """
 
         # Save as JSON (simple container, not true GeoJSON)
         payload_map = {
             "centre": self.centre,
             "bbox": list(self.bbox),
             "zoom": self.zoom,
-            "z": self.Z.tolist(),
+            "Z": self.Z.tolist(),
         }
 
         payload_plot = {
@@ -71,8 +158,13 @@ class TopoArt:
             "contour_width": self.contour_width,
         }
 
+        return {**payload_map, **payload_plot}
+
+
+    def save_geojson(self, json_path: str = "topo_art.geojson"):
+        """ Save GeoJSON to File Path """
         with open(json_path, "w") as f:
-            json.dump(payload_map | payload_plot, f)
+            json.dump(self.payload_geojson(), f)
 
 
     def bbox_from_coords(self, lon: float, lat: float, size_km: float = 0.2, aspect: list = (150, 80)):
@@ -236,6 +328,45 @@ class TopoArt:
 
         opacity = max(0.0, min(1.0, opacity))  # clamp
         return f"rgba({r}, {g}, {b}, {opacity})"
+
+    @staticmethod
+    def rgba_to_hex_and_opacity(rgba_str):
+        """
+        Convert an rgba string to a hex color code and separate opacity value.
+
+        Args:
+            rgba_str (str): RGBA string in the format 'rgba(r, g, b, a)' where
+                             r, g, b are integers in the range 0-255 and
+                             a is a float in the range 0-1.
+
+        Returns:
+            tuple: (hex_color, opacity) where hex_color is a string in the format '#RRGGBB'
+                   and opacity is a float in the range 0-1.
+
+        Example:
+            >>> rgba_to_hex_and_opacity('rgba(255, 0, 128, 0.5)')
+            ('#ff0080', 0.5)
+        """
+        # Extract the RGBA components from the string
+        try:
+            # Remove 'rgba(' and ')', then split by commas
+            rgba_parts = rgba_str.replace('rgba(', '').replace(')', '').split(',')
+
+            # Convert r, g, b to integers
+            r = int(rgba_parts[0].strip())
+            g = int(rgba_parts[1].strip())
+            b = int(rgba_parts[2].strip())
+
+            # Extract opacity as float
+            opacity = float(rgba_parts[3].strip())
+
+            # Convert RGB to hex format
+            hex_color = f'#{r:02x}{g:02x}{b:02x}'
+
+            return hex_color, opacity
+
+        except (ValueError, IndexError) as e:
+            raise ValueError(f"Invalid RGBA string format: {rgba_str}. Expected format: 'rgba(r, g, b, a)'") from e
 
 
     def colour_scale_from_hex(
