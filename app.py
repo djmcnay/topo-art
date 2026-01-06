@@ -376,8 +376,8 @@ with st.sidebar:
     st.markdown("### Contour")
 
     # streamlit inputs for meters per contour and contour width; updated from art
-    mpc = st.slider("metres per contour", 5.0, 100.0, art.metres_per_contour, step=5.0)
-    contour_width = st.slider("contour width", 0.0, 1.0, art.contour_width, step=0.01)
+    mpc = st.slider("metres per contour", 0.0, 100.0, art.metres_per_contour, step=5.0)
+    contour_width = st.slider("contour width", 0.0, 5.0, art.contour_width, step=0.01)
 
     # update art with the streamlit elements
     art.metres_per_contour = mpc

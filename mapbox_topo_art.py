@@ -32,13 +32,13 @@ class TopoArt:
         self.zoom: int = None
 
         # plot parameters
-        self.metres_per_contour: float = 20.0
-        self.contour_width: float = 0.5
-        self.contour_colour: str = "rgba(0, 0, 0, 0.15)"
+        self.metres_per_contour: float = 10.0
+        self.contour_width: float = 1.0
+        self.contour_colour: str = "rgba(0, 0, 0, 0.5)"
         self.colour_scale: str | list = [
-            (0.0, "rgba(0, 128, 128, 0.5)"),
-            (0.25, "rgba(255, 255, 255, 0.5)"),
-            (1.0, "rgba(128, 0, 128, 0.5)")
+            (0.0, "rgba(0, 128, 128, 1.0)"),
+            (0.25, "rgba(255, 255, 255, 1.0)"),
+            (1.0, "rgba(128, 0, 128, 1.0)")
         ]
 
         # actual plot
