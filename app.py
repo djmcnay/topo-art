@@ -173,8 +173,8 @@ with st.sidebar:
 # Render map & capture clicks
 with tabs[0]:
 
-    # Choose the initial map centre: otherwise default to London
-    map_center = [51.4266, 0] if art.centre is None else [art.centre["lat"], art.centre["lon"]]
+    # Choose the initial map centre: otherwise default to London (Charing Cross)
+    map_center = [51.5074, -0.12770] if art.centre is None else [art.centre["lat"], art.centre["lon"]]
     zoom = st.session_state["map_zoom"]
 
     # create a map and allow Lat/Lon popups on click
@@ -231,6 +231,47 @@ with st.sidebar:
 # If there is no elevation data, then stop running the app
 if art.Z is None:
     st.stop()
+
+with st.sidebar:
+
+    with st.expander("Advanced Settings", expanded=False):
+
+        save_format = st.selectbox("save format", ("svg", "png"), index=0)
+
+        # scaling factor for image export
+        n_scale = st.number_input(
+            "scale factor",
+            min_value=1,
+            max_value=10,
+            value=2,
+            step=1,
+            help="scale multiplier when downloading SVG image",
+        )
+
+        pixels_per_cm = st.number_input(
+            "pixels per cm",
+            value=37.8,
+            help="Assuming a standard 96 DPI (dots per inch), converted to cm; 96 pixels/inch ÷ 2.54cm = 37.8 pixels/cm"
+        )
+
+        button_confirm_centre = st.button(
+                "confirm center",
+                type="secondary",
+                width="stretch",
+                help="validate centroids; will show X as paper centre & O as target lat / long",
+        )
+
+        if st.button(
+                "clear cache",
+                type="secondary",
+                width="stretch",
+                help="clears centre, bbox, elevation data & zoom from the art object; requires fresh data call.",
+        ):
+            art.centre = None
+            art.bbox = None
+            art.Z = None
+            art.zoom = None
+            st.rerun()
 
 # %% App: Topo Art itself
 
@@ -357,52 +398,20 @@ with st.sidebar:
 
 fig = art.plot_contour()
 
-# %% Saving and Validation
+# fig.update_layout(
+#     autosize=False,
+#     xaxis=dict(
+#         scaleanchor="y",
+#         scaleratio=1,
+#     ),
+#     yaxis=dict(constrain="domain",)
+# )
 
-with st.sidebar:
-
-    with st.expander("Advanced Settings", expanded=False):
-
-        save_format = st.selectbox("save format", ("svg", "png"), index=0)
-
-        # scaling factor for image export
-        n_scale = st.sidebar.number_input(
-            "scale factor",
-            min_value=1,
-            max_value=10,
-            value=2,
-            step=1,
-            help="scale multiplier when downloading SVG image",
-        )
-
-        pixels_per_cm = st.number_input(
-            "pixels per cm",
-            value=37.8,
-            help="Assuming a standard 96 DPI (dots per inch), converted to cm; 96 pixels/inch ÷ 2.54cm = 37.8 pixels/cm"
-        )
-
-        if st.button(
-                "confirm center",
-                type="secondary",
-                width="stretch",
-                help="validate centroids; will show X as paper centre & O as target lat / long",
-        ):
-            # add an X in the centre of the plotly plot by paper reference,
-            # then add an O at the target x and y co-ordinates (which are the latitude and longitude)
-            fig.add_annotation(x=0.5, xref="paper", y=0.5, yref="paper", text="X", showarrow=False)
-            fig.add_annotation(x=art.centre["lon"], y=art.centre["lat"], text="O", showarrow=False)
-
-        if st.button(
-                "clear cache",
-                type="secondary",
-                width="stretch",
-                help="clears centre, bbox, elevation data & zoom from the art object; requires fresh data call.",
-        ):
-            art.centre = None
-            art.bbox = None
-            art.Z = None
-            art.zoom = None
-            st.rerun()
+if button_confirm_centre:
+    # add an X in the centre of the plotly plot by paper reference,
+    # then add an O at the target x and y co-ordinates (which are the latitude and longitude)
+    fig.add_annotation(x=0.5, xref="paper", y=0.5, yref="paper", text="X", showarrow=False)
+    fig.add_annotation(x=art.centre["lon"], y=art.centre["lat"], text="O", showarrow=False)
 
 # %% Art Tab
 
@@ -411,7 +420,7 @@ with tabs[1]:
     # plot the figure
     st.plotly_chart(
         fig,
-        width="stretch",
+        # width="stretch",
         config = {
           'toImageButtonOptions': {
             'format': save_format,
