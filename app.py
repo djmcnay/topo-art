@@ -1,15 +1,10 @@
 # app.py
 import json
-import os
-import yaml
 import pandas as pd
 import streamlit as st
 import folium
 from streamlit_folium import st_folium
 from mapbox_topo_art import TopoArt
-import streamlit_authenticator as stauth
-from streamlit_authenticator.utilities import LoginError
-from dotenv import load_dotenv
 
 # %% Streamlit Page Config
 
@@ -51,11 +46,14 @@ default_custom_scale = [
 
 # %% App Authentication
 
-# # Load authenticator config file: containes usernames and hashed passwords
-# with open('./.streamlit/auth_config.yaml') as file:
+# import streamlit_authenticator as stauth
+# from streamlit_authenticator.utilities import LoginError
+
+# # Load authenticator config file: contains usernames and hashed passwords
+# with open("./.streamlit/auth_config.yaml") as file:
 #     config = yaml.load(file, Loader=yaml.loader.SafeLoader)
 
-# # Initialize authenticator
+# # Initialize authenticator object
 # authenticator = stauth.Authenticate(
 #     config['credentials'],
 #     config['cookie']['name'],
@@ -129,7 +127,7 @@ with tabs[2]:
 
         # remember that colour_scale can be Custom or Named,
         # Named is a string like 'Tealrose' but Custom needs to be List[Tuple[Float, Str(RGBA)]]
-        # So if the colour scale uploaded to art is a list then override the defaults for the colour_scale
+        # So if the colour scale uploaded to art is a list, then override the defaults for the colour_scale
         if isinstance(art.colour_scale, list):
             default_custom_scale = art.colour_scale
 
@@ -151,7 +149,7 @@ with st.sidebar:
             value=default_size_options[default_size][0],
             min_value=1.0,
             max_value=1000.0,
-            help="width of desktop in cm",
+            help="width of image in cm",
         )
     with cols[1]:
         height = st.number_input(
@@ -159,7 +157,7 @@ with st.sidebar:
             value=default_size_options[default_size][1],
             min_value=1.0,
             max_value=1000.0,
-            help="height of desktop in cm",
+            help="height of image in cm",
         )
     with cols[2]:
         grid_size = st.number_input(
@@ -176,7 +174,7 @@ with st.sidebar:
 with tabs[0]:
 
     # Choose the initial map centre: otherwise default to London
-    map_center = [51.4266, 0] if art.centre is not None else [art.centre["lat"], art.centre["lon"]]
+    map_center = [51.4266, 0] if art.centre is None else [art.centre["lat"], art.centre["lon"]]
     zoom = st.session_state["map_zoom"]
 
     # create a map and allow Lat/Lon popups on click
@@ -240,7 +238,7 @@ with (st.sidebar):
 
     st.markdown("### Colour scale")
 
-    # dropdown menu to select colour scale; set colourscale
+    # dropdown menu to select colour scale; set colour scale
     # this is oddly complicated - the options are above, but Custom means a bespoke scale
     # because we can load the default (could be a saved name) or we could be working in bespoke space
     # if bespoke we need to check it's a list (not a string) and then name it "Custom"
@@ -262,7 +260,7 @@ with (st.sidebar):
             # this is a hack to get a list of the hex codes and opacities from the rgba codes
             # remember a colour scale will be like [(0.0, 'rgba(r, g, b, a)')]
             # so we use that to extract the hex from rgba and the opacity
-            # these then become the defaults for the colour picker & the input to the opacity dataframe
+            # these then become the defaults for the colour picker and the input to the opacity dataframe
             hex_opacity = []
             for i, v in enumerate(default_custom_scale):
                 ci, oi = art.rgba_to_hex_and_opacity(v[1])
@@ -318,15 +316,9 @@ with (st.sidebar):
                 o3 = o1
 
             # we can pick the default value from the 2nd entry in the scale
-            scale_mid = st.slider(
-                "midpoint",
-                0.0,
-                1.0,
-                value=default_custom_scale[1][0],
-                step=0.01,
-            )
+            scale_mid = st.slider("midpoint", 0.0, 1.0, value=default_custom_scale[1][0], step=0.01)
 
-            # for the colourscale we always use 3 colours
+            # for the colour scale we always use 3 colours
             # this is because with 2-we have no control over the midpoint
             # obviously if n_colours==1 these are all the same;
             # n_colours==2 implies c1 and c2 are the same so midpoint is between c2 and c3
@@ -342,7 +334,7 @@ with st.sidebar:
 
     st.markdown("### Contour")
 
-    # streamlit inputs for meters per contour & contour width; updated from art
+    # streamlit inputs for meters per contour and contour width; updated from art
     mpc = st.slider("metres per contour", 5.0, 100.0, art.metres_per_contour, step=5.0)
     contour_width = st.slider("contour width", 0.0, 1.0, art.contour_width, step=0.01)
 
@@ -396,7 +388,7 @@ with st.sidebar:
                 help="validate centroids; will show X as paper centre & O as target lat / long",
         ):
             # add an X in the centre of the plotly plot by paper reference,
-            # then add an O at the target x and y co-ordinates (which are the lattitude and longitude)
+            # then add an O at the target x and y co-ordinates (which are the latitude and longitude)
             fig.add_annotation(x=0.5, xref="paper", y=0.5, yref="paper", text="X", showarrow=False)
             fig.add_annotation(x=art.centre["lon"], y=art.centre["lat"], text="O", showarrow=False)
 
@@ -416,6 +408,7 @@ with st.sidebar:
 
 with tabs[1]:
 
+    # plot the figure
     st.plotly_chart(
         fig,
         width="stretch",
@@ -429,8 +422,9 @@ with tabs[1]:
         }
     )
 
-    geojson = art.payload_geojson()
 
+    # button to download data as a JSON object
+    geojson = art.payload_geojson()
     if st.download_button(
             "save GeoJson",
             data=json.dumps(geojson),
